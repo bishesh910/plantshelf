@@ -1,4 +1,5 @@
-import { FormEvent, useState } from "react";
+import type { FormEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { addPlant } from "./plantService";
@@ -16,6 +17,7 @@ export default function AddPlantPage() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!user) return;
     await addPlant(user.uid, { name, species, lastWatered, notes, nextWaterOn });
     nav("/");
   }
