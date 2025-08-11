@@ -1,70 +1,122 @@
 import { db } from "../lib/firebase";
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
   getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
+  addDoc,
   updateDoc,
+  deleteDoc,
+  onSnapshot,
+  collection,
+  doc,
+  query,
   where,
 } from "firebase/firestore";
-import type { Plant } from "../types/plant";
 
-const colRef = (uid: string) => collection(db, `users/${uid}/plants`);
-
-export async function listPlants(uid: string): Promise<Plant[]> {
-  const q = query(colRef(uid));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+// Keep this in one place so components can import the same shape
+export interface Plant {
+  id: string;
+  name: string;
+  nameLower: string;
+  nickname?: string;
+  notes?: string;
+  // Stored as "YYYY-MM-DD" (string)
+  nextWaterAt?: string;
+  favorite: boolean;
+  createdAt: number; // millis (int)
+  updatedAt: number; // millis (int)
 }
 
-export async function isNameUnique(
+function plantsCol(uid: string) {
+  return collection(db, `users/${uid}/plants`);
+}
+
+/** Subscribe to all plants for a user. Client can sort/filter. */
+export function listPlants(
   uid: string,
-  name: string,
-  excludeId?: string
-): Promise<boolean> {
-  const q = query(colRef(uid), where("nameLower", "==", name.toLowerCase()));
-  const snap = await getDocs(q);
-  return snap.docs.every((d) => d.id === excludeId);
+  onChange: (plants: Plant[]) => void
+) {
+  const q = query(plantsCol(uid));
+  return onSnapshot(q, (snap) => {
+    const items: Plant[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Omit<Plant, "id">),
+    }));
+    onChange(items);
+  });
 }
 
-export async function addPlant(uid: string, data: Partial<Plant>) {
+/** Add a plant. Assumes caller already checked name uniqueness. */
+export async function addPlant(
+  uid: string,
+  data: {
+    name: string;
+    nickname?: string;
+    notes?: string;
+    nextWaterAt?: string; // YYYY-MM-DD
+    favorite?: boolean;
+  }
+) {
   const now = Date.now();
-  const payload: Omit<Plant, "id"> = {
-    name: (data.name || "").trim(),
-    nameLower: (data.name || "").trim().toLowerCase(),
-    nickname: (data.nickname || "").trim() || undefined,
-    notes: (data.notes || "").trim() || undefined,
+  const docData: Omit<Plant, "id"> = {
+    name: data.name,
+    nameLower: data.name.toLowerCase(),
+    nickname: data.nickname || undefined,
+    notes: data.notes || undefined,
     nextWaterAt: data.nextWaterAt || undefined,
     favorite: Boolean(data.favorite),
     createdAt: now,
     updatedAt: now,
   };
-  return await addDoc(colRef(uid), payload);
+  await addDoc(plantsCol(uid), docData);
 }
 
-export async function updatePlant(uid: string, id: string, data: Partial<Plant>) {
-  const ref = doc(db, `users/${uid}/plants/${id}`);
-  const payload: Partial<Plant> = {
-    ...(data.name ? { name: data.name.trim(), nameLower: data.name.trim().toLowerCase() } : {}),
-    ...(data.nickname !== undefined ? { nickname: data.nickname?.trim() || undefined } : {}),
-    ...(data.notes !== undefined ? { notes: data.notes?.trim() || undefined } : {}),
-    ...(data.nextWaterAt !== undefined ? { nextWaterAt: data.nextWaterAt } : {}),
-    ...(data.favorite !== undefined ? { favorite: Boolean(data.favorite) } : {}),
-    updatedAt: Date.now(),
-  };
-  await updateDoc(ref, payload as any);
+/** Update fields on a plant. If name changes, you should call isNameUnique before this. */
+export async function updatePlant(
+  uid: string,
+  plantId: string,
+  patch: Partial<Pick<Plant, "name" | "nickname" | "notes" | "nextWaterAt" | "favorite">>
+) {
+  const ref = doc(db, `users/${uid}/plants/${plantId}`);
+  const update: any = { updatedAt: Date.now() };
+
+  if (patch.name !== undefined) {
+    update.name = patch.name;
+    update.nameLower = patch.name.toLowerCase();
+  }
+  if (patch.nickname !== undefined) update.nickname = patch.nickname || undefined;
+  if (patch.notes !== undefined) update.notes = patch.notes || undefined;
+  if (patch.nextWaterAt !== undefined) update.nextWaterAt = patch.nextWaterAt || undefined;
+  if (patch.favorite !== undefined) update.favorite = !!patch.favorite;
+
+  await updateDoc(ref, update);
 }
 
-export async function deletePlant(uid: string, id: string) {
-  const ref = doc(db, `users/${uid}/plants/${id}`);
+/** Delete a plant. */
+export async function deletePlant(uid: string, plantId: string) {
+  const ref = doc(db, `users/${uid}/plants/${plantId}`);
   await deleteDoc(ref);
 }
 
-export async function toggleFavorite(uid: string, id: string, fav: boolean) {
-  return updatePlant(uid, id, { favorite: fav });
+/** Toggle favorite (or set to a specific value). */
+export async function toggleFavorite(
+  uid: string,
+  plantId: string,
+  next?: boolean
+) {
+  const ref = doc(db, `users/${uid}/plants/${plantId}`);
+  await updateDoc(ref, {
+    favorite: next,
+    updatedAt: Date.now(),
+  } as any);
+}
+
+/** Case‑insensitive uniqueness check for name within a user. */
+export async function isNameUnique(
+  uid: string,
+  name: string,
+  excludeId?: string
+): Promise<boolean> {
+  const q = query(plantsCol(uid), where("nameLower", "==", name.toLowerCase()));
+  const snap = await getDocs(q);
+  const dup = snap.docs.find((d) => d.id !== excludeId);
+  return !dup;
 }

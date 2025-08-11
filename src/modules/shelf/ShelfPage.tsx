@@ -1,9 +1,19 @@
+// src/modules/shelf/ShelfPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { auth } from "../../lib/firebase"; // adjust path if needed
 import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
-import { listPlants, toggleFavorite, updatePlant, isNameUnique } from "../../services/plants.service";
-import type { Plant } from "../../types/plant";
+import { auth } from "../../lib/firebase";
+
+import {
+  listPlants,
+  toggleFavorite,
+  updatePlant,
+  isNameUnique,
+} from "../../services/plants.service";
+
+// If you keep a separate Plant type file, switch this import to that path.
+import type { Plant } from "../../services/plants.service";
+
 import PlantCard from "./PlantCard";
 import EditPlantModal from "./EditPlantModal";
 
@@ -16,94 +26,122 @@ export default function ShelfPage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    // auth listener
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setErr(null);
       setLoading(true);
-      try {
-        if (u) {
-          const data = await listPlants(u.uid);
-          setPlants(data as any);
-        } else {
-          setPlants([]);
-        }
-      } catch (e: any) {
-        setErr(e?.message ?? "Failed to load plants");
-      } finally {
+
+      // clean up any previous plants listener when auth changes
+      if (!u) {
+        setPlants([]);
         setLoading(false);
+        return;
       }
+
+      // LIVE updates: subscribe to Firestore and update state on every change
+      const unsubPlants = listPlants(u.uid, (data) => {
+        setPlants(data);
+        setLoading(false);
+      });
+
+      // when auth listener fires again (or unmount), also stop listening to plants
+      return () => unsubPlants();
     });
-    return () => unsub();
+
+    return () => unsubAuth();
   }, []);
 
-  const sorted = useMemo(() => {
-    const arr = [...plants];
-    const toMillis = (d?: string) => (d ? new Date(d).getTime() : Number.MAX_SAFE_INTEGER);
-    arr.sort((a, b) =>
-      Number(b.favorite) - Number(a.favorite) ||
-      toMillis(a.nextWaterAt) - toMillis(b.nextWaterAt) ||
-      b.createdAt - a.createdAt
-    );
-    return showFavs ? arr.filter((p) => p.favorite) : arr;
+  // Filter + sort (favorites first, then nextWaterAt soonest, then newest)
+  const view = useMemo(() => {
+    const rows = showFavs ? plants.filter((p) => p.favorite) : plants.slice();
+    rows.sort((a, b) => {
+      const favDiff = Number(b.favorite) - Number(a.favorite);
+      if (favDiff) return favDiff;
+
+      const aWhen = a.nextWaterAt ? new Date(a.nextWaterAt).getTime() : Number.POSITIVE_INFINITY;
+      const bWhen = b.nextWaterAt ? new Date(b.nextWaterAt).getTime() : Number.POSITIVE_INFINITY;
+      if (aWhen !== bWhen) return aWhen - bWhen;
+
+      return b.createdAt - a.createdAt;
+    });
+    return rows;
   }, [plants, showFavs]);
 
-  async function handleToggleFav(id: string, fav: boolean) {
+  async function onToggleFav(p: Plant) {
     if (!user) return;
     try {
-      await toggleFavorite(user.uid, id, fav);
-      setPlants((prev) => prev.map((p) => (p.id === id ? { ...p, favorite: fav } : p)));
-    } catch (e) {
-      // no-op; in real app show toast
+      await toggleFavorite(user.uid, p.id, !p.favorite);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to toggle favorite");
     }
   }
 
-  async function handleSaveEdit(data: { name: string; nickname?: string; notes?: string; nextWaterAt?: string; }) {
-    if (!user || !editing) return;
-    const name = data.name.trim();
-    if (!name) { alert("Name is required"); return; }
-    const unique = await isNameUnique(user.uid, name, editing.id);
-    if (!unique) { alert("You already have a plant with this name."); return; }
-    await updatePlant(user.uid, editing.id, data as any);
-    setPlants((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...data, nameLower: name.toLowerCase(), updatedAt: Date.now() } : p)));
-    setEditing(null);
+  async function onSaveEdit(plantId: string, patch: Partial<Plant>) {
+    if (!user) return;
+
+    try {
+      // If name changed, enforce uniqueness
+      if (patch.name && patch.name.trim().toLowerCase() !== patch.nameLower) {
+        const ok = await isNameUnique(user.uid, patch.name.trim(), plantId);
+        if (!ok) throw new Error("You already have a plant with that name.");
+      }
+      await updatePlant(user.uid, plantId, {
+        name: patch.name?.trim(),
+        nickname: patch.nickname?.trim(),
+        notes: patch.notes?.trim(),
+        nextWaterAt: patch.nextWaterAt,
+        favorite: patch.favorite,
+      });
+      setEditing(null);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to save changes");
+    }
   }
 
-  if (!user) return <div className="p-4">Please sign in to view your shelf.</div>;
+  if (!user) {
+    return <div className="p-4">Please sign in to view your shelf.</div>;
+  }
 
   return (
-    <div className="p-4 max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto p-4">
       <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-bold">Your Shelf</h1>
+        <h1 className="text-xl font-semibold">Your Shelf</h1>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={showFavs} onChange={(e) => setShowFavs(e.target.checked)} />
+          <label className="text-sm inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showFavs}
+              onChange={(e) => setShowFavs(e.target.checked)}
+            />
             Show favorites only
           </label>
         </div>
       </div>
 
-      {loading && <div className="text-sm text-gray-500">Loading…</div>}
-      {err && <div className="text-sm text-red-500">{err}</div>}
+      {err && <p className="text-sm text-red-500 mb-2">{err}</p>}
+      {loading && <p className="text-sm text-gray-500">Loading…</p>}
+
+      {!loading && view.length === 0 && (
+        <p className="text-sm text-gray-500">No plants yet.</p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {sorted.map((p) => (
+        {view.map((p) => (
           <PlantCard
             key={p.id}
             plant={p}
-            onEdit={(pl) => setEditing(pl)}
-            onToggleFavorite={handleToggleFav}
+            onEdit={() => setEditing(p)}
+            onToggleFavorite={() => onToggleFav(p)}
           />
         ))}
-        {!loading && sorted.length === 0 && (
-          <div className="text-sm text-gray-600">No plants yet.</div>
-        )}
       </div>
 
       {editing && (
         <EditPlantModal
           plant={editing}
           onClose={() => setEditing(null)}
-          onSave={handleSaveEdit}
+          onSave={(patch) => onSaveEdit(editing.id, patch)}
         />
       )}
     </div>
