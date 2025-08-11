@@ -1,69 +1,87 @@
-# React + TypeScript + Vite
+# 🌱 Plantshelf
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Plantshelf** is a virtual plant care and tracking app built with **React (Vite)** and **Firebase**.
+It allows users to add plants, set watering schedules, mark favorites, and track care history — all in a beautiful, simple interface.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Features
 
-## Expanding the ESLint configuration
+* **User Authentication** (Firebase Auth)
+* **Add, Edit, and Delete Plants**
+* **Watering Reminders** with customizable dates
+* **Favorites** to quickly find your most-loved plants
+* **Notes** for each plant
+* **Responsive UI** designed for mobile and desktop
+* **Firestore Database** for real-time updates
+* **Secure API Keys** stored in `.env`
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🛠️ Tech Stack
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+* **Frontend:** React + Vite + TypeScript
+* **Styling:** TailwindCSS
+* **Backend:** Firebase (Auth, Firestore)
+* **Hosting:** Firebase Hosting
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📦 Installation & Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. **Clone the repository**
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+   ```bash
+   git clone https://github.com/yourusername/plantshelf.git
+   cd plantshelf
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+3. **Create a `.env` file**
+
+   ```
+   VITE_FIREBASE_API_KEY=your_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   ```
+
+   ⚠️ **Important:**
+
+   * Do **not** commit `.env` to GitHub.
+   * Keep your Firebase API keys private (make repo private or use environment variables in deployment).
+
+4. **Start the development server**
+
+   ```bash
+   npm run dev
+   ```
+
+5. **Build for production**
+
+   ```bash
+   npm run build
+   ```
+
+---
+
+## 🔒 Security Notes
+
+* Avoid logging sensitive information (e.g., API keys, Auth UIDs) to the browser console.
+* Ensure `.env` is listed in `.gitignore`.
+* If deploying publicly, consider using Firebase security rules to protect user data.
+
+---
+
+## 💡 Future Ideas
+
+* Plant care tips & AI-based recommendations
+* Push notifications for watering reminders
+* Plant community sharing features
