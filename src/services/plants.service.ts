@@ -29,6 +29,18 @@ function plantsCol(uid: string) {
   return collection(db, `users/${uid}/plants`);
 }
 
+/** Helper: normalize any date string into YYYY-MM-DD or undefined */
+function toYMD(input?: string): string | undefined {
+  if (!input) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input; // already correct
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Subscribe to all plants for a user. Client can sort/filter. */
 export function listPlants(
   uid: string,
@@ -51,7 +63,7 @@ export async function addPlant(
     name: string;
     nickname?: string;
     notes?: string;
-    nextWaterAt?: string; // YYYY-MM-DD
+    nextWaterAt?: string; // any string date, will normalize
     favorite?: boolean;
   }
 ) {
@@ -61,7 +73,7 @@ export async function addPlant(
     nameLower: data.name.toLowerCase(),
     nickname: data.nickname || undefined,
     notes: data.notes || undefined,
-    nextWaterAt: data.nextWaterAt || undefined,
+    nextWaterAt: toYMD(data.nextWaterAt),
     favorite: Boolean(data.favorite),
     createdAt: now,
     updatedAt: now,
@@ -84,7 +96,7 @@ export async function updatePlant(
   }
   if (patch.nickname !== undefined) update.nickname = patch.nickname || undefined;
   if (patch.notes !== undefined) update.notes = patch.notes || undefined;
-  if (patch.nextWaterAt !== undefined) update.nextWaterAt = patch.nextWaterAt || undefined;
+  if (patch.nextWaterAt !== undefined) update.nextWaterAt = toYMD(patch.nextWaterAt);
   if (patch.favorite !== undefined) update.favorite = !!patch.favorite;
 
   await updateDoc(ref, update);
@@ -109,7 +121,7 @@ export async function toggleFavorite(
   } as any);
 }
 
-/** Case‑insensitive uniqueness check for name within a user. */
+/** Case-insensitive uniqueness check for name within a user. */
 export async function isNameUnique(
   uid: string,
   name: string,
