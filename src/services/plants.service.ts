@@ -78,6 +78,8 @@ export async function addPlant(
     createdAt: now,
     updatedAt: now,
   };
+
+  console.log("writing plant", docData);
   await addDoc(plantsCol(uid), docData);
 }
 
