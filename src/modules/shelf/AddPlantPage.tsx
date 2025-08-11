@@ -63,6 +63,8 @@ export default function AddPlantPage() {
 
     setLoading(true);
     try {
+      // DEBUG: show which UID we're about to write under
+
       const unique = await isNameUnique(user.uid, name);
       if (!unique) { setErr("You already have a plant with that name."); return; }
 

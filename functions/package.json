@@ -1,6 +1,6 @@
 {
   "name": "functions",
-    "scripts": {
+  "scripts": {
   "lint": "echo \"skip lint\"",
   "build": "tsc",
   "build:watch": "tsc --watch",

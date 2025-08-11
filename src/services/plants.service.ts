@@ -79,9 +79,17 @@ export async function addPlant(
     updatedAt: now,
   };
 
-  console.log("writing plant", docData);
+
+  try {
   await addDoc(plantsCol(uid), docData);
+} catch (e: any) {
+  if (import.meta.env.DEV) {
+    console.error("addPlant failed:", e?.code, e?.message);
+  }
+  throw e;
 }
+}
+
 
 /** Update fields on a plant. If name changes, you should call isNameUnique before this. */
 export async function updatePlant(
