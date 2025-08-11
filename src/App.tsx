@@ -4,6 +4,7 @@ import ShelfPage from "./modules/shelf/ShelfPage";
 import AddPlantPage from "./modules/shelf/AddPlantPage";
 import SignInPage from "./modules/auth/SignInPage";
 import NotFoundPage from "./modules/common/NotFoundPage";
+import AdminPage from "./modules/admin/AdminPage"; // 👈 add
 
 export default function App() {
   const { user, signOut } = useAuth();
@@ -18,6 +19,8 @@ export default function App() {
               <>
                 <Link to="/" className="hover:underline">My Shelf</Link>
                 <Link to="/add" className="hover:underline">Add Plant</Link>
+                {/* Admin link (safe to show; Functions enforce access) */}
+                <Link to="/admin" className="hover:underline">Admin</Link>
                 <button
                   onClick={signOut}
                   className="px-3 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900"
@@ -46,6 +49,11 @@ export default function App() {
           <Route
             path="/add"
             element={user ? <AddPlantPage /> : <Navigate to="/signin" replace />}
+          />
+          {/* Admin route (the callable Functions check the allowlist, so non-admins can't do anything) */}
+          <Route
+            path="/admin"
+            element={user ? <AdminPage /> : <Navigate to="/signin" replace />}
           />
           <Route path="/signin" element={!user ? <SignInPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<NotFoundPage />} />
