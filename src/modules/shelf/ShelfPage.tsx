@@ -1,102 +1,110 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { listPlants, removePlant, updatePlant } from "./plantService";
-import type { Plant } from "./types";
+import { useEffect, useMemo, useState } from "react";
+import { auth } from "../../lib/firebase"; // adjust path if needed
+import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
+import { listPlants, toggleFavorite, updatePlant, isNameUnique } from "../../services/plants.service";
+import type { Plant } from "../../types/plant";
+import PlantCard from "./PlantCard";
+import EditPlantModal from "./EditPlantModal";
 
 export default function ShelfPage() {
-  const { user } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
+  const [showFavs, setShowFavs] = useState(false);
+  const [editing, setEditing] = useState<Plant | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function load() {
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      setErr(null);
+      setLoading(true);
+      try {
+        if (u) {
+          const data = await listPlants(u.uid);
+          setPlants(data as any);
+        } else {
+          setPlants([]);
+        }
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to load plants");
+      } finally {
+        setLoading(false);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const sorted = useMemo(() => {
+    const arr = [...plants];
+    const toMillis = (d?: string) => (d ? new Date(d).getTime() : Number.MAX_SAFE_INTEGER);
+    arr.sort((a, b) =>
+      Number(b.favorite) - Number(a.favorite) ||
+      toMillis(a.nextWaterAt) - toMillis(b.nextWaterAt) ||
+      b.createdAt - a.createdAt
+    );
+    return showFavs ? arr.filter((p) => p.favorite) : arr;
+  }, [plants, showFavs]);
+
+  async function handleToggleFav(id: string, fav: boolean) {
     if (!user) return;
-    setLoading(true);
-    setError(null);
     try {
-      const rows = await listPlants(user.uid);
-      setPlants(rows as any);
-    } catch (err: any) {
-      console.error("Error fetching plants:", err);
-      // Common culprit: missing composite index for userId+createdAt
-      setError(err?.message ?? "Failed to load plants");
-    } finally {
-      setLoading(false);
+      await toggleFavorite(user.uid, id, fav);
+      setPlants((prev) => prev.map((p) => (p.id === id ? { ...p, favorite: fav } : p)));
+    } catch (e) {
+      // no-op; in real app show toast
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
-
-  async function onDelete(id: string) {
-    await removePlant(id);
-    await load();
+  async function handleSaveEdit(data: { name: string; nickname?: string; notes?: string; nextWaterAt?: string; }) {
+    if (!user || !editing) return;
+    const name = data.name.trim();
+    if (!name) { alert("Name is required"); return; }
+    const unique = await isNameUnique(user.uid, name, editing.id);
+    if (!unique) { alert("You already have a plant with this name."); return; }
+    await updatePlant(user.uid, editing.id, data as any);
+    setPlants((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...data, nameLower: name.toLowerCase(), updatedAt: Date.now() } : p)));
+    setEditing(null);
   }
 
-  async function markWatered(p: Plant) {
-    const today = new Date().toISOString().slice(0, 10);
-    await updatePlant(p.id, { lastWatered: today });
-    await load();
-  }
-
-  if (!user) return null;
+  if (!user) return <div className="p-4">Please sign in to view your shelf.</div>;
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">My Shelf</h1>
+    <div className="p-4 max-w-3xl mx-auto">
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-bold">Your Shelf</h1>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={showFavs} onChange={(e) => setShowFavs(e.target.checked)} />
+            Show favorites only
+          </label>
+        </div>
+      </div>
 
-      {loading && <p>Loading...</p>}
+      {loading && <div className="text-sm text-gray-500">Loading…</div>}
+      {err && <div className="text-sm text-red-500">{err}</div>}
 
-      {!loading && error && (
-        <p className="text-red-500 text-sm mb-3">
-          {error.includes("index") ? (
-            <>This query needs a Firestore composite index. Create it in the console and refresh.</>
-          ) : (
-            <>Error: {error}</>
-          )}
-        </p>
-      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {sorted.map((p) => (
+          <PlantCard
+            key={p.id}
+            plant={p}
+            onEdit={(pl) => setEditing(pl)}
+            onToggleFavorite={handleToggleFav}
+          />
+        ))}
+        {!loading && sorted.length === 0 && (
+          <div className="text-sm text-gray-600">No plants yet.</div>
+        )}
+      </div>
 
-      {!loading && !error && plants.length === 0 && (
-        <p className="text-zinc-500">No plants yet. Click “Add Plant” to get started.</p>
-      )}
-
-      {!loading && !error && plants.length > 0 && (
-        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {plants.map((p) => (
-            <li key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="font-medium text-lg">{p.name}</h2>
-                  {p.species && <p className="text-sm text-zinc-500">{p.species}</p>}
-                </div>
-                <button
-                  onClick={() => onDelete(p.id)}
-                  className="text-sm underline text-red-500"
-                >
-                  Delete
-                </button>
-              </div>
-
-              <div className="mt-3 space-y-1 text-sm">
-                <p>Last watered: {p.lastWatered ?? "—"}</p>
-                {p.nextWaterOn && <p>Next water: {p.nextWaterOn}</p>}
-                {p.notes && <p className="text-zinc-500">Notes: {p.notes}</p>}
-              </div>
-
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => markWatered(p)}
-                  className="px-3 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900 text-sm"
-                >
-                  Mark Watered Today
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {editing && (
+        <EditPlantModal
+          plant={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </div>
   );
