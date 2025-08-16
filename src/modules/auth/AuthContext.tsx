@@ -1,10 +1,16 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-// import { User, onAuthStateChanged, signOut as fbSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+// src/modules/auth/AuthContext.tsx
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
-import { onAuthStateChanged, signOut as fbSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut as fbSignOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+} from "firebase/auth";
 import { auth } from "../../lib/firebase";
 
-type AuthContextType = {
+type AuthCtx = {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -12,7 +18,7 @@ type AuthContextType = {
   signOut: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthCtx | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -25,21 +31,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const value = useMemo(
+  const value = useMemo<AuthCtx>(
     () => ({
       user,
       loading,
-      signIn: async (email: string, password: string) => {
+
+      async signIn(email, password) {
         await signInWithEmailAndPassword(auth, email, password);
       },
-      signUp: async (email: string, password: string) => {
-        await createUserWithEmailAndPassword(auth, email, password);
+
+      async signUp(email, password) {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        // Send verification email immediately after account creation
+        if (cred.user) {
+          try {
+            await sendEmailVerification(cred.user);
+            // optional: you could surface a toast/notice in UI that the email was sent
+          } catch (e) {
+            // swallow error to avoid blocking sign-up; you can log if desired
+            console.warn("sendEmailVerification failed:", e);
+          }
+        }
       },
-      signOut: async () => {
+
+      async signOut() {
         await fbSignOut(auth);
       },
     }),
-    [user, loading]
+    [user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
