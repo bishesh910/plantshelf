@@ -13,8 +13,17 @@ import AdminRoute from "./modules/auth/AdminRoute";
 import { useIsAdmin } from "./modules/auth/useIsAdmin";
 
 export default function App() {
-  const { user, signOut } = useAuth();
-  const { isAdmin } = useIsAdmin(); // checks Firestore: admins/{email}
+  const { user, loading, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
+
+  // ✅ Don’t render routes/redirects until we know the auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen grid place-items-center text-sm text-zinc-500">
+        Restoring session…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -27,17 +36,12 @@ export default function App() {
               <>
                 <Link to="/" className="hover:underline">My Shelf</Link>
                 <Link to="/add" className="hover:underline">Add Plant</Link>
-
-                {/* Show Admin link only if verified + in admins allowlist */}
                 {user.emailVerified && isAdmin && (
                   <Link to="/admin" className="hover:underline">Admin</Link>
                 )}
-
-                {/* Unverified users can head to verify helper */}
                 {!user.emailVerified && (
                   <Link to="/verify-email" className="hover:underline">Verify Email</Link>
                 )}
-
                 <button
                   onClick={signOut}
                   className="px-3 py-1 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-900"

@@ -1,11 +1,14 @@
 // src/lib/firebase.ts
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
-// App Check
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
+// Your existing config:
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -15,15 +18,22 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
-// Enable App Check only in production (to avoid local dev friction)
-if (import.meta.env.PROD && import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY) {
+// ✅ Pin session persistence to local (survives refreshes, tabs)
+export const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch((e) => {
+  // Non-fatal; log for diagnostics
+  console.warn("Auth persistence fallback:", e);
+});
+
+export const db = getFirestore(app);
+
+// App Check (send tokens in both dev & prod if key exists)
+const siteKey = import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY;
+if (siteKey) {
   initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY),
+    provider: new ReCaptchaV3Provider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
 }
-
-export const auth = getAuth(app);
-export const db = getFirestore(app);
