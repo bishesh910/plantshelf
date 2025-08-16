@@ -22,25 +22,28 @@ export function useIsAdmin() {
     setLoading(true);
     setError(null);
 
+    // Realtime subscription with error handling
     const unsub = onSnapshot(
       ref,
       (snap) => {
         setIsAdmin(snap.exists());
         setLoading(false);
       },
-      async (err) => {
+      async (e) => {
+        // Use the param so TS doesn't flag it as unused
+        console.warn("useIsAdmin onSnapshot error:", e);
         try {
           const once = await getDoc(ref);
           setIsAdmin(once.exists());
-        } catch (e: any) {
+        } catch (ee: any) {
           setIsAdmin(false);
-          setError(e?.message ?? "Failed to read admin doc");
-          console.warn("useIsAdmin read error:", e);
+          setError(ee?.message ?? "Failed to read admin doc");
         } finally {
           setLoading(false);
         }
       }
     );
+
     return () => unsub();
   }, [user?.email]);
 
